@@ -25,10 +25,33 @@ export async function GET() {
             // Helper to combine
             const combine = (dateStr: string, timeStr: string) => {
                 if (!dateStr || !timeStr) return 0;
-                // Salesforce Time field often returns "15:30:00.000Z"
-                // If we concatenation dateStr + "T" + timeStr, it might work if timeStr has Z
-                // r.Date__c might be "2026-02-08"
-                return new Date(`${dateStr}T${timeStr}`).getTime();
+                // Salesforce Time_in__c comes as HH:mm:ss.SSSZ (but "Z" is a lie, it's EST wall-clock)
+                // We strip the Z if present to avoid UTC interpretation and use a formatter trick
+                const cleanTime = timeStr.replace('Z', '');
+
+                // Construct a ISO-like string WITHOUT 'Z'
+                const isoStr = `${dateStr}T${cleanTime}`;
+
+                // Create a date object. The constructor interprets strings without 'Z' as LOCAL time.
+                // However, we want to force interpretation as EST (America/New_York).
+                // A robust way in JS is to use the formatter to find the offset for this specific date
+                const dateAtEst = new Date(isoStr + '-05:00'); // Default to EST offset
+
+                // To be truly accurate with DST, we need a better approach:
+                // We can use the fact that new Date("...") without offset uses system local time.
+                // But on a server, we don't know the local time.
+                // Best way: use Intl to parse the wall-clock time as if it were EST.
+
+                // Helper to get actual epoch from wall-clock in specific timezone
+                const getEpochFromWallClock = (dtStr: string, tz: string) => {
+                    const tempDate = new Date(dtStr);
+                    const estStr = tempDate.toLocaleString('en-US', { timeZone: tz, hourCycle: 'h23' });
+                    const estDate = new Date(estStr);
+                    const diff = tempDate.getTime() - estDate.getTime();
+                    return tempDate.getTime() + diff;
+                };
+
+                return getEpochFromWallClock(isoStr, 'America/New_York');
             };
 
             return {
@@ -87,20 +110,40 @@ export async function POST(req: Request) {
         const durationHours = duration / 3600000;
 
         // Create Date and Time strings
-        const startObj = new Date(startTime);
-        const endObj = new Date(endTime);
+        // Helper to get YYYY-MM-DD in a specific timezone
+        const getESTDate = (timestamp: number) => {
+            return new Date(timestamp).toLocaleDateString('en-CA', {
+                timeZone: 'America/New_York'
+            });
+        };
 
-        // Date__c: YYYY-MM-DD
-        const dateOnly = startObj.toISOString().split('T')[0];
+        // Helper to get HH:mm:ss.SSS in a specific timezone
+        const getESTTime = (timestamp: number) => {
+            const date = new Date(timestamp);
+            const timeStr = date.toLocaleTimeString('en-GB', {
+                timeZone: 'America/New_York',
+                hour12: false,
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+            // Get milliseconds
+            const ms = String(date.getMilliseconds()).padStart(3, '0');
+            return `${timeStr}.${ms}Z`; // Append Z for Salesforce compatibility, though stored as wall-clock
+        };
 
-        // Time_in__c: HH:mm:ss.SSSZ
-        // Salesforce Time field expects value like "14:30:00.000Z"
-        // toISOString() gives "2026-02-08T14:30:00.000Z" -> split -> capture time part
-        const timeIn = startObj.toISOString().split('T')[1];
-        const timeOut = endObj.toISOString().split('T')[1];
+        // Date__c: YYYY-MM-DD (EST)
+        const dateOnly = getESTDate(startTime);
 
-        // Calculate Day of Week
-        const dayOfWeek = startObj.toLocaleDateString('en-US', { weekday: 'long' });
+        // Time_in__c: HH:mm:ss.000 (EST)
+        const timeIn = getESTTime(startTime);
+        const timeOut = getESTTime(endTime);
+
+        // Calculate Day of Week (EST)
+        const dayOfWeek = new Date(startTime).toLocaleDateString('en-US', {
+            weekday: 'long',
+            timeZone: 'America/New_York'
+        });
 
         // Lookup Contact and Account
         let contactId = undefined;
