@@ -99,16 +99,13 @@ export const TimerProvider = ({ children }: { children: ReactNode }) => {
     if (isPiPActive && document.pictureInPictureElement) {
       // Exit PiP
       await document.exitPictureInPicture();
-      setIsPiPActive(false);
+      // State updated via event listener
     } else {
       // Enter PiP
       try {
         if (!canvasRef.current || !videoRef.current) return;
 
         // Ensure canvas has content before capturing
-        // (The useEffect logic handles this usually, but let's be safe)
-        
-        // Capture stream from canvas
         const stream = canvasRef.current.captureStream(30); // 30 FPS
         videoRef.current.srcObject = stream;
         
@@ -117,16 +114,11 @@ export const TimerProvider = ({ children }: { children: ReactNode }) => {
 
         // Request PiP
         await videoRef.current.requestPictureInPicture();
-        setIsPiPActive(true);
-
-        // Listen for leave event (e.g. user closes PiP window)
-        videoRef.current.addEventListener('leavepictureinpicture', () => {
-          setIsPiPActive(false);
-        }, { once: true });
+        // State updated via event listener
 
       } catch (err: any) {
         console.error("Failed to enter PiP mode:", err);
-        alert(`PiP Failed: ${err.message}`);
+        // alert(`PiP Failed: ${err.message}`);
       }
     }
   };
@@ -181,7 +173,6 @@ export const TimerProvider = ({ children }: { children: ReactNode }) => {
         if (popupDismissTimerRef.current) clearTimeout(popupDismissTimerRef.current);
     };
   }, [isIdlePopupOpen]);
-
 
   return (
     <TimerContext.Provider value={{ ...timer, togglePiP, isPiPActive, isIdlePopupOpen, setIsIdlePopupOpen }}>

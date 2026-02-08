@@ -34,14 +34,18 @@ export const getSalesforceConnection = async () => {
 export interface TimeEntryRecord {
     Id?: string;
     Name?: string; // Standard Name field
-    Start_Time__c: string; // ISO
-    End_Time__c: string; // ISO
+    Date__c: string; // YYYY-MM-DD
+    Time_in__c: string; // HH:mm:ss.SSSZ
+    Time_Out__c: string; // HH:mm:ss.SSSZ
     Duration_Hours__c: number;
     User_Email__c: string;
     Summary__c?: string;
+    Contact__c?: string; // Lookup ID
+    Account__c?: string; // Lookup ID (Department)
+    Day_of_the_week__c?: string; // Picklist/String
 }
 
-const OBJECT_NAME = 'Timecard_Entry__c';
+const OBJECT_NAME = 'Time_Sheet__c';
 
 export const saveTimeEntryToSalesforce = async (entry: Partial<TimeEntryRecord>) => {
     const c = await getSalesforceConnection();
@@ -52,10 +56,10 @@ export const saveTimeEntryToSalesforce = async (entry: Partial<TimeEntryRecord>)
 export const getTimeEntriesFromSalesforce = async (email: string) => {
     const c = await getSalesforceConnection();
     // Query
-    const q = `SELECT Id, Start_Time__c, End_Time__c, Duration_Hours__c, User_Email__c, Summary__c 
+    const q = `SELECT Id, Date__c, Time_in__c, Time_Out__c, Duration_Hours__c, User_Email__c, Summary__c 
                FROM ${OBJECT_NAME} 
                WHERE User_Email__c = '${email}' 
-               ORDER BY Start_Time__c DESC LIMIT 100`;
+               ORDER BY Date__c DESC, Time_in__c DESC LIMIT 100`;
 
     return c.query(q);
 };
@@ -63,4 +67,17 @@ export const getTimeEntriesFromSalesforce = async (email: string) => {
 export const deleteTimeEntryFromSalesforce = async (id: string) => {
     const c = await getSalesforceConnection();
     return c.sobject(OBJECT_NAME).destroy(id);
+};
+
+export const getContactByEmail = async (email: string) => {
+    const c = await getSalesforceConnection();
+    // Query Contact by Email
+    // Return Id and AccountId
+    const q = `SELECT Id, AccountId FROM Contact WHERE Email = '${email}' LIMIT 1`;
+    const res = await c.query(q);
+
+    if (res.totalSize > 0) {
+        return res.records[0] as { Id: string, AccountId?: string };
+    }
+    return null;
 };

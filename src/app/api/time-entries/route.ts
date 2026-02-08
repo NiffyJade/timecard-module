@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { saveTimeEntryToSalesforce, getTimeEntriesFromSalesforce, deleteTimeEntryFromSalesforce } from '@/lib/salesforce';
+import { saveTimeEntryToSalesforce, getTimeEntriesFromSalesforce, deleteTimeEntryFromSalesforce, getContactByEmail } from '@/lib/salesforce';
 // import { saveMockEntry, getMockEntries, deleteMockEntry } from '@/lib/mock-db';
 
 export async function GET() {
@@ -15,17 +15,34 @@ export async function GET() {
         const entries = result.records || [];
 
         // Map Salesforce format back to App format
-        const mapped = entries.map((r: any) => ({
-            id: r.Id,
-            startTime: new Date(r.Start_Time__c).getTime(),
-            endTime: new Date(r.End_Time__c).getTime(),
-            // Salesforce stores Hours (e.g. 1.5), App uses ms. 
-            // 1.5 hrs * 60 min * 60 sec * 1000 ms = ms
-            duration: (r.Duration_Hours__c || 0) * 3600000,
-            summary: r.Summary__c || '',
-            date: r.Start_Time__c,
-            userEmail: r.User_Email__c
-        }));
+        const mapped = entries.map((r: any) => {
+            // Reconstruct full DateTime
+            // Date__c is YYYY-MM-DD
+            // Time_in__c is HH:mm:ss.SSSZ or similar
+            // We need to combine them carefully
+            // Assuming Time_in__c is in UTC or offset-aware
+
+            // Helper to combine
+            const combine = (dateStr: string, timeStr: string) => {
+                if (!dateStr || !timeStr) return 0;
+                // Salesforce Time field often returns "15:30:00.000Z"
+                // If we concatenation dateStr + "T" + timeStr, it might work if timeStr has Z
+                // r.Date__c might be "2026-02-08"
+                return new Date(`${dateStr}T${timeStr}`).getTime();
+            };
+
+            return {
+                id: r.Id,
+                startTime: combine(r.Date__c, r.Time_in__c),
+                endTime: combine(r.Date__c, r.Time_Out__c),
+                // Salesforce stores Hours (e.g. 1.5), App uses ms. 
+                // 1.5 hrs * 60 min * 60 sec * 1000 ms = ms
+                duration: (r.Duration_Hours__c || 0) * 3600000,
+                summary: r.Summary__c || '',
+                date: r.Date__c,
+                userEmail: r.User_Email__c
+            };
+        });
 
         return NextResponse.json(mapped);
     } catch (error) {
@@ -69,13 +86,49 @@ export async function POST(req: Request) {
         // ms / 1000 / 60 / 60
         const durationHours = duration / 3600000;
 
-        const sfEntry = {
+        // Create Date and Time strings
+        const startObj = new Date(startTime);
+        const endObj = new Date(endTime);
+
+        // Date__c: YYYY-MM-DD
+        const dateOnly = startObj.toISOString().split('T')[0];
+
+        // Time_in__c: HH:mm:ss.SSSZ
+        // Salesforce Time field expects value like "14:30:00.000Z"
+        // toISOString() gives "2026-02-08T14:30:00.000Z" -> split -> capture time part
+        const timeIn = startObj.toISOString().split('T')[1];
+        const timeOut = endObj.toISOString().split('T')[1];
+
+        // Calculate Day of Week
+        const dayOfWeek = startObj.toLocaleDateString('en-US', { weekday: 'long' });
+
+        // Lookup Contact and Account
+        let contactId = undefined;
+        let accountId = undefined;
+
+        try {
+            const contact = await getContactByEmail(session.user.email);
+            if (contact) {
+                contactId = contact.Id;
+                accountId = contact.AccountId;
+            } else {
+                console.warn(`No contact found for email: ${session.user.email}`);
+            }
+        } catch (err) {
+            console.error('Error looking up contact:', err);
+        }
+
+        const sfEntry: any = {
             Name: entryName,
-            Start_Time__c: new Date(startTime).toISOString(),
-            End_Time__c: new Date(endTime).toISOString(),
+            Date__c: dateOnly,
+            Time_in__c: timeIn,
+            Time_Out__c: timeOut,
             Duration_Hours__c: parseFloat(durationHours.toFixed(2)), // Round to 2 decimals
             Summary__c: summary || '',
-            User_Email__c: session.user.email
+            User_Email__c: session.user.email,
+            Day_of_the_week__c: dayOfWeek,
+            Contact__c: contactId,
+            Account__c: accountId
         };
 
         const res: any = await saveTimeEntryToSalesforce(sfEntry);
