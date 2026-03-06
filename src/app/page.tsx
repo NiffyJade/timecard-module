@@ -15,6 +15,8 @@ interface TimeEntry {
   duration: number; // milliseconds
   summary?: string;
   date: string;
+  department?: string;
+  didUpdateTodoList?: boolean;
 }
 
 export default function Home() {

@@ -58,12 +58,12 @@ export async function GET() {
                 id: r.Id,
                 startTime: combine(r.Date__c, r.Time_in__c),
                 endTime: combine(r.Date__c, r.Time_Out__c),
-                // Salesforce stores Hours (e.g. 1.5), App uses ms. 
-                // 1.5 hrs * 60 min * 60 sec * 1000 ms = ms
                 duration: (r.Duration_Hours__c || 0) * 3600000,
                 summary: r.Summary__c || '',
                 date: r.Date__c,
-                userEmail: r.User_Email__c
+                userEmail: r.User_Email__c,
+                department: r.Departments__c || '',
+                didUpdateTodoList: r.Did_you_update_your_todo_list__c || false
             };
         });
 
@@ -82,7 +82,7 @@ export async function POST(req: Request) {
 
     try {
         const body = await req.json();
-        const { startTime, endTime, duration, summary } = body;
+        const { startTime, endTime, duration, summary, department, didUpdateTodoList } = body;
 
         // Create a descriptive name: "email - YYYY-MM-DD HH:mm" (EST)
         const dateStr = new Intl.DateTimeFormat('en-US', {
@@ -171,13 +171,25 @@ export async function POST(req: Request) {
             User_Email__c: session.user.email,
             Day_of_the_week__c: dayOfWeek,
             Contact__c: contactId,
-            Account__c: accountId
         };
 
+        // Department → Departments__c
+        if (department) {
+            sfEntry.Departments__c = department;
+        }
+
+        // Checkbox → Did_you_update_your_todo_list__c
+        if (didUpdateTodoList === true || didUpdateTodoList === false) {
+            sfEntry.Did_you_update_your_todo_list__c = didUpdateTodoList;
+        }
+
+        console.log('Saving SF entry:', JSON.stringify(sfEntry, null, 2));
         const res: any = await saveTimeEntryToSalesforce(sfEntry);
 
         if (!res.success) {
-            throw new Error('Salesforce create failed: ' + JSON.stringify(res.errors));
+            const errDetails = JSON.stringify(res.errors);
+            console.error('Salesforce create errors:', errDetails);
+            throw new Error('Salesforce create failed: ' + errDetails);
         }
 
         return NextResponse.json({ success: true, id: res.id });

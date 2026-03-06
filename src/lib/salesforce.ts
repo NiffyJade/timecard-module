@@ -43,6 +43,8 @@ export interface TimeEntryRecord {
     Contact__c?: string; // Lookup ID
     Account__c?: string; // Lookup ID (Department)
     Day_of_the_week__c?: string; // Picklist/String
+    Did_you_update_your_todo_list__c?: boolean;
+    Departments__c?: string; // Text/Picklist
 }
 
 const OBJECT_NAME = 'Time_Sheet__c';
@@ -56,7 +58,7 @@ export const saveTimeEntryToSalesforce = async (entry: Partial<TimeEntryRecord>)
 export const getTimeEntriesFromSalesforce = async (email: string) => {
     const c = await getSalesforceConnection();
     // Query
-    const q = `SELECT Id, Date__c, Time_in__c, Time_Out__c, Duration_Hours__c, User_Email__c, Summary__c 
+    const q = `SELECT Id, Date__c, Time_in__c, Time_Out__c, Duration_Hours__c, User_Email__c, Summary__c, Departments__c, Did_you_update_your_todo_list__c 
                FROM ${OBJECT_NAME} 
                WHERE User_Email__c = '${email}' 
                ORDER BY Date__c DESC, Time_in__c DESC LIMIT 100`;

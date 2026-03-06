@@ -15,6 +15,8 @@ interface TimeEntry {
   duration: number; // milliseconds
   summary?: string;
   date: string;
+  department?: string;
+  didUpdateTodoList?: boolean;
 }
 
 interface DraggableTimecardProps {
@@ -37,6 +39,8 @@ const DraggableTimecard: React.FC<DraggableTimecardProps> = ({ onSaveEntry }) =>
   // Custom wrapper likely not needed if we stick to the UI buttons provided
   
   const [summary, setSummary] = useState('');
+  const [department, setDepartment] = useState('');
+  const [didUpdateTodoList, setDidUpdateTodoList] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
@@ -81,7 +85,9 @@ const DraggableTimecard: React.FC<DraggableTimecardProps> = ({ onSaveEntry }) =>
       endTime: entryEndTime,
       duration: entryDuration,
       summary: summary,
-      date: new Date().toISOString()
+      date: new Date().toISOString(),
+      department: department || undefined,
+      didUpdateTodoList: didUpdateTodoList
     };
     
     onSaveEntry(entry);
@@ -92,7 +98,9 @@ const DraggableTimecard: React.FC<DraggableTimecardProps> = ({ onSaveEntry }) =>
         // Optional: Reset manual fields or keep them? Keeping them might be easier for bulk entry.
         // Let's just clear summary.
     }
-    setSummary(''); 
+    setSummary('');
+    setDepartment('');
+    setDidUpdateTodoList(false);
   };
 
   if (!mounted) return null;
@@ -230,6 +238,37 @@ const DraggableTimecard: React.FC<DraggableTimecardProps> = ({ onSaveEntry }) =>
                     value={summary}
                     onChange={(e) => setSummary(e.target.value)}
                 />
+            </div>
+
+            {/* Department Dropdown */}
+            <div className="w-full">
+                <label className="block text-xs font-semibold text-gray-500 mb-1">Department</label>
+                <select
+                    value={department}
+                    onChange={(e) => setDepartment(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                >
+                    <option value="">Select Department</option>
+                    <option value="Programs">Programs</option>
+                    <option value="Bizop">Bizop</option>
+                    <option value="HR">HR</option>
+                    <option value="IT">IT</option>
+                    <option value="Communications">Communications</option>
+                </select>
+            </div>
+
+            {/* Todo List Checkbox */}
+            <div className="w-full flex items-center gap-2">
+                <input
+                    type="checkbox"
+                    id="todoListCheck"
+                    checked={didUpdateTodoList}
+                    onChange={(e) => setDidUpdateTodoList(e.target.checked)}
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <label htmlFor="todoListCheck" className="text-sm text-gray-700 cursor-pointer select-none">
+                    Did you update your todo list?
+                </label>
             </div>
 
             {/* Controls */}

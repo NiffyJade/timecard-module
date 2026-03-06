@@ -11,7 +11,9 @@ interface TimeEntry {
   duration: number; // milliseconds
   summary?: string;
   date: string;
-  isLocked?: boolean; // Example of "completed" status
+  isLocked?: boolean;
+  department?: string;
+  didUpdateTodoList?: boolean;
 }
 
 interface HistoryViewProps {
@@ -31,7 +33,7 @@ const HistoryView: React.FC<HistoryViewProps> = ({ entries, onDelete }) => {
     const currentYear = now.getFullYear();
     
     return entries.filter(e => {
-        const d = new Date(e.date);
+        const d = new Date(e.date + 'T12:00:00');
         return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
     }).reduce((acc, curr) => acc + curr.duration, 0);
   }, [entries]);
@@ -42,13 +44,13 @@ const HistoryView: React.FC<HistoryViewProps> = ({ entries, onDelete }) => {
     
     if (searchTerm) {
       result = result.filter(e => 
-        new Date(e.date).toLocaleDateString().includes(searchTerm) ||
+        new Date(e.date + 'T12:00:00').toLocaleDateString().includes(searchTerm) ||
         e.id.includes(searchTerm) // Fallback search
       );
     }
     
     if (sortOrder === 'recent') {
-      result.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      result.sort((a, b) => new Date(b.date + 'T12:00:00').getTime() - new Date(a.date + 'T12:00:00').getTime());
     } else {
       result.sort((a, b) => b.duration - a.duration);
     }
@@ -63,7 +65,7 @@ const HistoryView: React.FC<HistoryViewProps> = ({ entries, onDelete }) => {
       headers.join(','),
       ...filteredEntries.map(e => [
         e.id,
-        new Date(e.date).toLocaleDateString(),
+        new Date(e.date + 'T12:00:00').toLocaleDateString(),
         new Date(e.startTime).toLocaleTimeString(),
         new Date(e.endTime).toLocaleTimeString(),
         e.duration,
@@ -146,7 +148,7 @@ const HistoryView: React.FC<HistoryViewProps> = ({ entries, onDelete }) => {
                         </div>
                         <div>
                             <div className="font-medium text-gray-800">
-                                {new Date(entry.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'America/New_York' })}
+                                {new Date(entry.date + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'America/New_York' })}
                             </div>
                             <div className="text-xs text-gray-500">
                                 {new Date(entry.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', timeZone: 'America/New_York'})} - 
@@ -157,6 +159,22 @@ const HistoryView: React.FC<HistoryViewProps> = ({ entries, onDelete }) => {
                                     "{entry.summary}"
                                 </div>
                             )}
+                            <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                {entry.department && (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-100">
+                                        {entry.department}
+                                    </span>
+                                )}
+                                {entry.didUpdateTodoList !== undefined && (
+                                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${
+                                        entry.didUpdateTodoList
+                                            ? 'bg-green-50 text-green-700 border-green-100'
+                                            : 'bg-gray-50 text-gray-500 border-gray-100'
+                                    }`}>
+                                        {entry.didUpdateTodoList ? '✓' : '✗'} Todo updated
+                                    </span>
+                                )}
+                            </div>
                         </div>
                     </div>
                     
